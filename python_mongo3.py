@@ -11,10 +11,10 @@ while True:
     def main_program():
 
         def get_credentials_from_netrc():
-            netrc_path = ".netrc"  # Read from the current directory
+            netrc_path = ".netrc_mongodb"  # Read from the current directory
 
             if not os.path.exists(netrc_path):
-                print("\n[!] Error: .netrc file not found in the current directory.")
+                print("\n[!] Error: .netrc_mongodb file not found in the current directory.")
                 return None, None, None
 
             host, username, password = None, None, None
