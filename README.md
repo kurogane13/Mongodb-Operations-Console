@@ -19,10 +19,20 @@ The program is a command line interface client developed in python, which uses t
 Version 3 includes:
 
 - Manual login option. The user manually provides:
+  
   - Host ip
   - username
   - password
+
 - Automatic database login option via netrc file, validating credentials.
+  ```bash
+  #Provide credentials in the following format example
+     
+  host 127.0.0.1
+  username john
+  password doe
+  
+  ```
 - Creation and deletion of mongodb databases
 - Creation and deletion of mongodb collections in databases
 
