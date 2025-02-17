@@ -24,14 +24,14 @@ Requirements to operate the program:
 
 How to run the program:
 
-- Download the python_mongo2.py file
+- Download the python_mongo3.py file
 - Install and import the following libraries:
   - import pymongo
   - from pymongo import MongoClient
   - import getpass
   - import json
 
-- Run the program: python3.x python_mongo2.py
+- Run the program: python3.x python_mongo3.py
 
 
 
