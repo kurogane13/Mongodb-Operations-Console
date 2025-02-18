@@ -1,9 +1,13 @@
 # Mongodb-Operations-Console
 Pymongo based CLI client, to run operation on existing databases and collections
 
-Program developed by Gustavo Wydler Azuaga - 12-01-2021
+Program developed by Gustavo Wydler Azuaga 
+
+Version 1 released in: 12-01-2021
 --------------------------------------------------------------------------------------------
-NEW VERSION RELEASED: 3 - 02-17-2025
+Version 2 released in: 02-17-2025
+--------------------------------------------------------------------------------------------
+NEW VERSION RELEASED: 3 - 02-18-2025
 --------------------------------------------------------------------------------------------
 
 NOTE: Program screenshots can be viewed in the Screenshots folder
@@ -16,7 +20,7 @@ The program is a command line interface client developed in python, which uses t
 
 --------------------------------------------------------------------------------------------
 
-Version 3 includes:
+Version 2 and 3 includes:
 
 - Manual login option. The user manually provides:
   
@@ -33,8 +37,20 @@ Version 3 includes:
   password doe
   
   ```
-- Creation and deletion of mongodb databases
-- Creation and deletion of mongodb collections in databases
+  
+Version 3 now includes:
+
+- New creation and deletion features
+	- Users in pymongo client (and mongo shell in linux)
+	- Users in databases 
+	- Mongodb databases
+	- Collections in databases
+	
+- New permissions features
+
+	- View user permissions
+	- Grant user permissions
+	- Revoke user permissions
 
 --------------------------------------------------------------------------------------------
 

@@ -76,7 +76,8 @@ while True:
 
             else:
                 print("\n[!] Invalid option. Please try again.")
-                return None
+                input("\nPress enter to return to the main menu: ")
+                mongodb_main_menu()
 
             try:
                 client = MongoClient(host=host, username=username, password=password)
@@ -112,10 +113,10 @@ while True:
             if not client:
                 return
 
-            db_name = input("\nEnter database name: ")
+            db_name = input("\nEnter database name to create a collection in it: ")
             db = client[db_name]
 
-            collection_name = input("\nEnter new collection name: ")
+            collection_name = input("\nEnter new collection name for database "+db_name+": ")
 
             try:
                 if collection_name not in db.list_collection_names():
@@ -134,39 +135,79 @@ while True:
             if not client:
                 return
 
-            db_name = input("\nEnter the database name to delete: ")
-            confirmation = input(f"\nAre you sure you want to delete the database '{db_name}'? (yes/no): ")
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
 
-            if confirmation.lower() == "yes":
+            while True:
+                db_name = input("\nEnter the database name to delete (or type '0' to return): ").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
+            confirmation = input(
+                f"\nAre you sure you want to delete the database '{db_name}'? (yes/no): ").strip().lower()
+            if confirmation == "yes":
                 client.drop_database(db_name)
                 print(f"\n[+] Database '{db_name}' deleted successfully.")
             else:
                 print("\n[-] Operation canceled.")
 
-            input("\nPress enter to return to the main menu: ")
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
 
         def delete_a_mongo_db_collection():
             client = get_mongo_client()
             if not client:
                 return
 
-            db_name = input("\nEnter database name: ")
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            while True:
+                db_name = input("\nEnter the database name (or type '0' to return): ").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
             db = client[db_name]
+            collections = db.list_collection_names()
 
-            collection_name = input("\nEnter collection name to delete: ")
+            if not collections:
+                print(f"\n[-] No collections found in database '{db_name}'.")
+                input("\nPress Enter to return to the main menu: ")
+                mongodb_main_menu()
+                return
 
-            if collection_name in db.list_collection_names():
-                confirmation = input(
-                    f"\nAre you sure you want to delete the collection '{collection_name}'? (yes/no): ")
-                if confirmation.lower() == "yes":
-                    db[collection_name].drop()
-                    print(f"\n[+] Collection '{collection_name}' deleted successfully from database '{db_name}'.")
-                else:
-                    print("\n[-] Operation canceled.")
+            while True:
+                collection_name = input("\nEnter the collection name to delete (or type '0' to return): ").strip()
+                if collection_name == "0":
+                    mongodb_main_menu()
+                    return
+                if collection_name not in collections:
+                    print(f"\n[!] Collection '{collection_name}' not found in database '{db_name}'. Try again.")
+                    continue
+                break
+
+            confirmation = input(
+                f"\nAre you sure you want to delete the collection '{collection_name}'? (yes/no): ").strip().lower()
+            if confirmation == "yes":
+                db[collection_name].drop()
+                print(f"\n[+] Collection '{collection_name}' deleted successfully from database '{db_name}'.")
             else:
-                print(f"\n[-] Collection '{collection_name}' does not exist in database '{db_name}'.")
+                print("\n[-] Operation canceled.")
 
-            input("\nPress enter to return to the main menu: ")
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
 
         def show_mongodb_databases():
             client = get_mongo_client()
@@ -184,6 +225,564 @@ while True:
             input("\nPress enter to return to the main menu: ")
             mongodb_main_menu()
 
+        def list_mongodb_databases(client):
+            try:
+                databases = client.list_database_names()
+                print("\nAvailable Databases:\n")
+                for db in databases:
+                    print(f"- {db}")
+                return databases
+            except Exception as e:
+                print(f"\n[!] Error retrieving databases: {e}")
+                return []
+
+            input("\nPress enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        import getpass
+
+        def create_mongodb_user():
+            client = get_mongo_client()
+            if not client:
+                return
+
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            while True:
+                db_name = input(
+                    "\nEnter the database name where the user will be created (or type '0' to return): ").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
+            db = client[db_name]
+
+            # Retrieve the currently authenticated user
+            try:
+                connection_status = client.admin.command("connectionStatus")
+                auth_info = connection_status.get("authInfo", {})
+                authenticated_users = auth_info.get("authenticatedUsers", [])
+
+                if not authenticated_users:
+                    print("\n[!] No authenticated users found. Make sure you are logged in with admin credentials.")
+                    return
+
+                admin_user = authenticated_users[0].get("user")
+                if not admin_user:
+                    print("\n[!] Unable to determine the authenticated user.")
+                    return
+            except Exception as e:
+                print(f"\n[!] Error retrieving the authenticated user: {e}")
+                return
+
+            # Check if the current user has privileges to create users
+            try:
+                user_info = client.admin.command("usersInfo", admin_user)
+                user_roles = user_info.get("users", [{}])[0].get("roles", [])
+
+                # Extract roles that grant user creation rights
+                admin_privileges = [
+                    role for role in user_roles if
+                    (role["db"] == db_name and role["role"] in ["dbOwner", "userAdmin"]) or
+                    (role["db"] == "admin" and role["role"] == "userAdminAnyDatabase")
+                ]
+
+                if not admin_privileges:
+                    print("\n[!] You do not have sufficient privileges to create users in this database.")
+                    input("\nPress Enter to return to the main menu: ")
+                    mongodb_main_menu()
+                    return
+            except Exception as e:
+                print(f"\n[!] Error checking user privileges: {e}")
+                return
+
+            while True:
+                new_username = input("\nEnter the new username (or type '0' to return): ").strip()
+                if new_username == "0":
+                    mongodb_main_menu()
+                    return
+                if new_username:
+                    break
+
+            while True:
+                new_password = getpass.getpass(
+                    "\nEnter the password for the new user (or type '0' to return): ").strip()
+                if new_password == "0":
+                    mongodb_main_menu()
+                    return
+                if new_password:
+                    break
+
+            print("\nChoose a role for the new user:\n")
+            print("[1] Read-only")
+            print("[2] Read-Write")
+            print("[3] Database Owner")
+            print("[0] Return to main menu")
+
+            while True:
+                role_choice = input("\nEnter your choice (1/2/3/0): ").strip()
+                if role_choice == "0":
+                    mongodb_main_menu()
+                    return
+                if role_choice in ["1", "2", "3"]:
+                    break
+
+            role_mapping = {
+                "1": "read",
+                "2": "readWrite",
+                "3": "dbOwner"
+            }
+            role = role_mapping[role_choice]
+
+            try:
+                db.command("createUser", new_username, pwd=new_password, roles=[{"role": role, "db": db_name}])
+                print(f"\n[+] User '{new_username}' created successfully with '{role}' role in database '{db_name}'.")
+            except Exception as e:
+                print(f"\n[!] Error creating user: {e}")
+
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        def delete_mongodb_user():
+            client = get_mongo_client()
+            if not client:
+                return
+
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            while True:
+                db_name = input(
+                    "\nEnter the database name where the user will be deleted (or type '0' to return): ").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
+            db = client[db_name]
+
+            # Retrieve the currently authenticated user
+            try:
+                connection_status = client.admin.command("connectionStatus")
+                auth_info = connection_status.get("authInfo", {})
+                authenticated_users = auth_info.get("authenticatedUsers", [])
+
+                if not authenticated_users:
+                    print("\n[!] No authenticated users found. Make sure you are logged in with admin credentials.")
+                    return
+
+                admin_user = authenticated_users[0].get("user")
+                if not admin_user:
+                    print("\n[!] Unable to determine the authenticated user.")
+                    return
+            except Exception as e:
+                print(f"\n[!] Error retrieving the authenticated user: {e}")
+                return
+
+            # Check if the current user has privileges to delete users
+            try:
+                user_info = client.admin.command("usersInfo", admin_user)
+                user_roles = user_info.get("users", [{}])[0].get("roles", [])
+
+                # Extract roles that grant user deletion rights
+                admin_privileges = [
+                    role for role in user_roles if
+                    (role["db"] == db_name and role["role"] in ["dbOwner", "userAdmin"]) or
+                    (role["db"] == "admin" and role["role"] == "userAdminAnyDatabase")
+                ]
+
+                if not admin_privileges:
+                    print("\n[!] You do not have sufficient privileges to delete users in this database.")
+                    input("\nPress Enter to return to the main menu: ")
+                    mongodb_main_menu()
+                    return
+            except Exception as e:
+                print(f"\n[!] Error checking user privileges: {e}")
+                return
+
+            users = db.command("usersInfo")["users"]
+            if not users:
+                print(f"\n[!] No users found in database '{db_name}'.")
+                input("\nPress Enter to return to the main menu: ")
+                mongodb_main_menu()
+                return
+
+            print("\nAvailable Users in Database: "+db_name+"\n")
+            for user in users:
+                print(f"- {user['user']}")
+
+            while True:
+                user_to_delete = input("\nEnter the username to delete from database: "+db_name+" (or type '0' to return): ").strip()
+                if user_to_delete == "0":
+                    mongodb_main_menu()
+                    return
+                if user_to_delete in [u["user"] for u in users]:
+                    break
+                print("\n[!] Invalid username. Try again.")
+
+            try:
+                db.command("dropUser", user_to_delete)
+                print(f"\n[+] User '{user_to_delete}' deleted successfully from database '{db_name}'.")
+            except Exception as e:
+                print(f"\n[!] Error deleting user: {e}")
+
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        def show_user_permissions():
+            client = get_mongo_client()
+
+            if not client:  # Ensure we received a valid client connection
+                return
+
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            db_name = input("\nEnter the database to check permissions: ").strip()
+            if db_name not in databases:
+                print("\n[!] Database not found.")
+                return
+
+            try:
+                db = client[db_name]
+
+                # Retrieve authenticated username from MongoDB session
+                user_info = db.command("connectionStatus")
+                username = user_info.get("authInfo", {}).get("authenticatedUsers", [{}])[0].get("user")
+
+                if not username:
+                    print("\n[!] No authenticated user found.")
+                    return
+
+                user_info = db.command("usersInfo", username)
+
+                if "users" in user_info and user_info["users"]:
+                    roles = user_info["users"][0].get("roles", [])
+                    print(f"\nPermissions for {username} on {db_name}:\n")
+                    for role in roles:
+                        print(f"- Role: {role['role']}, Database: {role['db']}")
+                else:
+                    print("\n[!] No specific permissions found for this user in database: "+db_name)
+
+            except Exception as e:
+                print(f"\n[!] Error retrieving user permissions: {e}")
+
+            input("\nPress enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        def create_mongo_client_user():
+            client = get_mongo_client()
+            if not client:
+                return
+
+            admin_db = client["admin"]
+
+            # Retrieve the currently authenticated user
+            try:
+                connection_status = client.admin.command("connectionStatus")
+                auth_info = connection_status.get("authInfo", {})
+                authenticated_users = auth_info.get("authenticatedUsers", [])
+
+                if not authenticated_users:
+                    print("\n[!] No authenticated users found. Make sure you are logged in with admin credentials.")
+                    return
+
+                admin_user = authenticated_users[0].get("user")
+                if not admin_user:
+                    print("\n[!] Unable to determine the authenticated user.")
+                    return
+            except Exception as e:
+                print(f"\n[!] Error retrieving the authenticated user: {e}")
+                return
+
+            # Check if the current user has admin privileges
+            try:
+                user_info = client.admin.command("usersInfo", admin_user)
+                user_roles = user_info.get("users", [{}])[0].get("roles", [])
+
+                admin_privileges = [
+                    role for role in user_roles if
+                    role["db"] == "admin" and role["role"] in ["root", "userAdminAnyDatabase"]
+                ]
+
+                if not admin_privileges:
+                    print("\n[!] You do not have sufficient privileges to create client users.")
+                    input("\nPress Enter to return to the main menu: ")
+                    mongodb_main_menu()
+                    return
+            except Exception as e:
+                print(f"\n[!] Error checking user privileges: {e}")
+                return
+
+            while True:
+                new_username = input("\nEnter the new client username (or type '0' to return): ").strip()
+                if new_username == "0":
+                    mongodb_main_menu()
+                    return
+                if new_username:
+                    break
+
+            while True:
+                new_password = getpass.getpass(
+                    "\nEnter the password for the new user (or type '0' to return): ").strip()
+                if new_password == "0":
+                    mongodb_main_menu()
+                    return
+                if new_password:
+                    break
+
+            print("\nChoose a role for the new client user:\n")
+            print("[1] Read-only access to all databases")
+            print("[2] Read-Write access to all databases")
+            print("[3] Admin (can manage users & databases)")
+            print("[0] Return to main menu")
+
+            while True:
+                role_choice = input("\nEnter your choice (1/2/3/0): ").strip()
+                if role_choice == "0":
+                    mongodb_main_menu()
+                    return
+                if role_choice in ["1", "2", "3"]:
+                    break
+
+            role_mapping = {
+                "1": "readAnyDatabase",
+                "2": "readWriteAnyDatabase",
+                "3": "userAdminAnyDatabase"
+            }
+            role = role_mapping[role_choice]
+
+            try:
+                admin_db.command("createUser", new_username, pwd=new_password, roles=[{"role": role, "db": "admin"}])
+                print(
+                    f"\n[+] User '{new_username}' created successfully with '{role}' role at the MongoDB client level.")
+            except Exception as e:
+                print(f"\n[!] Error creating client user: {e}")
+
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        def delete_mongo_client_user():
+            client = get_mongo_client()
+            if not client:
+                return
+
+            admin_db = client["admin"]
+
+            # Retrieve the currently authenticated user
+            try:
+                connection_status = client.admin.command("connectionStatus")
+                auth_info = connection_status.get("authInfo", {})
+                authenticated_users = auth_info.get("authenticatedUsers", [])
+
+                if not authenticated_users:
+                    print("\n[!] No authenticated users found. Make sure you are logged in with admin credentials.")
+                    return
+
+                admin_user = authenticated_users[0].get("user")
+                if not admin_user:
+                    print("\n[!] Unable to determine the authenticated user.")
+                    return
+            except Exception as e:
+                print(f"\n[!] Error retrieving the authenticated user: {e}")
+                return
+
+            # Check if the current user has admin privileges
+            try:
+                user_info = client.admin.command("usersInfo", admin_user)
+                user_roles = user_info.get("users", [{}])[0].get("roles", [])
+
+                admin_privileges = [
+                    role for role in user_roles if
+                    role["db"] == "admin" and role["role"] in ["root", "userAdminAnyDatabase"]
+                ]
+
+                if not admin_privileges:
+                    print("\n[!] You do not have sufficient privileges to delete client users.")
+                    input("\nPress Enter to return to the main menu: ")
+                    mongodb_main_menu()
+                    return
+            except Exception as e:
+                print(f"\n[!] Error checking user privileges: {e}")
+                return
+
+            existing_users = []
+            try:
+                users_info = admin_db.command("usersInfo")
+                existing_users = [user["user"] for user in users_info.get("users", [])]
+            except Exception as e:
+                print(f"\n[!] Error retrieving user list: {e}")
+                return
+
+            if not existing_users:
+                print("\n[!] No users found in the MongoDB client.")
+                input("\nPress Enter to return to the main menu: ")
+                mongodb_main_menu()
+                return
+
+            print("\nExisting MongoDB Client Users:\n")
+            for user in existing_users:
+                print(f" - {user}")
+
+            while True:
+                username_to_delete = input("\nEnter the username to delete (or type '0' to return): ").strip()
+                if username_to_delete == "0":
+                    mongodb_main_menu()
+                    return
+                if username_to_delete in existing_users:
+                    break
+                print("\n[!] User not found. Try again.")
+
+            try:
+                admin_db.command("dropUser", username_to_delete)
+                print(f"\n[+] User '{username_to_delete}' has been successfully deleted from the MongoDB client.")
+            except Exception as e:
+                print(f"\n[!] Error deleting user: {e}")
+
+            input("\nPress Enter to return to the main menu: ")
+            mongodb_main_menu()
+
+        def grant_user_privileges():
+            client = get_mongo_client()  # Get MongoDB client
+
+            if not client:
+                return
+
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            while True:
+                db_name = input("\nEnter the database to grant privileges (or type '0' to return): ").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
+            print("\nChoose privilege to grant:\n")
+            print("1 - Read")
+            print("2 - Read & Write")
+            print("3 - Delete")
+            print("4 - Database Owner")
+            print("0 - Return to main menu")
+
+            while True:
+                choice = input("\nSelect an option (0-4): \n").strip()
+                if choice == "0":
+                    mongodb_main_menu()
+                    return
+                role_map = {
+                    "1": "read",
+                    "2": "readWrite",
+                    "3": "dbAdmin",
+                    "4": "dbOwner"
+                }
+                if choice not in role_map:
+                    print("\n[!] Invalid option. Try again.")
+                    continue
+                role = role_map[choice]
+                break
+
+            try:
+                db = client[db_name]
+
+                # Retrieve authenticated username dynamically
+                user_info = db.command("connectionStatus")
+                username = user_info.get("authInfo", {}).get("authenticatedUsers", [{}])[0].get("user")
+
+                if not username:
+                    print("\n[!] No authenticated user found.")
+                    return
+
+                db.command("grantRolesToUser", username, roles=[{"role": role, "db": db_name}])
+                print(f"\n[+] Granted '{role}' role to {username} on {db_name}.")
+
+            except Exception as e:
+                print(f"\n[!] Error granting privilege: {e}")
+
+            mongodb_main_menu()  # Return to main menu after operation
+
+        def revoke_user_privileges():
+            client = get_mongo_client()  # Get MongoDB client
+
+            if not client:
+                return
+
+            databases = list_mongodb_databases(client)
+            if not databases:
+                return
+
+            while True:
+                db_name = input("\nEnter the database to revoke privileges from (or type '0' to return): \n").strip()
+                if db_name == "0":
+                    mongodb_main_menu()
+                    return
+                if db_name not in databases:
+                    print("\n[!] Database not found. Try again.")
+                    continue
+                break
+
+            try:
+                db = client[db_name]
+
+                # Retrieve authenticated username dynamically
+                user_info = db.command("connectionStatus")
+                username = user_info.get("authInfo", {}).get("authenticatedUsers", [{}])[0].get("user")
+
+                if not username:
+                    print("\n[!] No authenticated user found.")
+                    return
+
+                user_info = db.command("usersInfo", username)
+
+                if "users" in user_info and user_info["users"]:
+                    roles = user_info["users"][0].get("roles", [])
+                    if not roles:
+                        print("\n[!] No roles assigned to this user.")
+                        return
+
+                    print("\nUser currently has the following roles:\n")
+                    for idx, role in enumerate(roles, start=1):
+                        print(f"{idx} - {role['role']} (DB: {role['db']})")
+                    print("0 - Return to main menu")
+
+                    while True:
+                        choice = input("\nSelect the role number to revoke (or type '0' to return): ").strip()
+                        if choice == "0":
+                            mongodb_main_menu()
+                            return
+                        if not choice.isdigit() or int(choice) < 1 or int(choice) > len(roles):
+                            print("\n[!] Invalid selection. Try again.")
+                            continue
+                        role_to_remove = roles[int(choice) - 1]
+                        break
+
+                    db.command("revokeRolesFromUser", username, roles=[role_to_remove])
+                    print(f"\n[+] Revoked '{role_to_remove['role']}' role from {username} on {db_name}.")
+
+                else:
+                    print("\n[!] No specific roles found for this user.")
+
+            except Exception as e:
+                print(f"\n[!] Error revoking privilege: {e}")
+
+            input("\nPress enter to return to the main menu: ")
+            mongodb_main_menu()  # Return to main menu after operation
+
         def connect_to_a_mongodb_database():
             global client, mydb, mycol, DATABASE_HOST, DATABASE_NAME, DATABASE_USERNAME, DATABASE_PASSWORD
 
@@ -193,6 +792,9 @@ while True:
                 client = MongoClient(host=host, username=username, password=password)
 
                 print("\nShowing Databases: " + str(client.list_database_names()))  # lists databases
+
+                print("\nIMPORTANT!: CONNECTING TO THE CLIENT AND/OR A DATABASE, DOES NOT GUARANTEE ACCESS TO ALL OPERATIONS IN THE MENU.")
+                print("VALIDATE THE USER PERMISSIONS FIRST, OR CONNECT WITH AN ADMIN USER TO HAVE FULL PRIVILIGES")
 
                 DATABASE_NAME=input("\nType the name of the database you want to connect to, and press enter: ")
 
@@ -558,25 +1160,58 @@ while True:
             print("\n###############################################")
             print("       MONGO DB MAIN OPERATIONS MENU CONSOLE\n")
             print("\n1 - Show available mongodb databases")
-            print("2 - Create a new mongodb database")
-            print("3 - Create a new collection in a mongodb database")
-            print("4 - Delete a mongodb database")
-            print("5 - Delete a collection in a mongodb database")
-            print("6 - Connect to a mongodb database")
+            print("2 - Connect to a mongodb database")
+            print("--------------------------------------------------")
+            print("\nCREATE OPERATIONS\n")
+            print("3 - Create a new mongodb database")
+            print("4 - Create a new collection in a mongodb database")
+            print("--------------------------------------------------")
+            print("\nDELETE OPERATIONS\n")
+            print("5 - Delete a mongodb database")
+            print("6 - Delete a collection in a mongodb database")
+            print("--------------------------------------------------")
+            print("\nUSER PERMISSION OPERATIONS\n")
+            print("7-  View user permissions for a database")
+            print("8-  Grant user permissions for a database")
+            print("9-  Revoke user permissions for a database")
+            print("--------------------------------------------------")
+            print("\nUSER CREATION AND DELETION OPERATIONS\n")
+            print("10 - Create a new mongoclient admin user")
+            print("11 - Delete an admin mongoclient user")
+            print("12 - Create a new user in a mongodb database")
+            print("13 - Delete an existing user from a mongodb database")
+            print("--------------------------------------------------")
+            print("\nIMPORTANT!: CONNECTING TO THE CLIENT AND/OR A DATABASE, DOES NOT GUARANTEE ACCESS TO ALL OPERATIONS IN THE MENU.")
+            print("VALIDATE THE USER PERMISSIONS FIRST, OR CONNECT WITH AN ADMIN USER TO HAVE FULL PRIVILIGES")
             options = input("\nType a number for the menu and press enter: ")
 
             if options == "1":
                 show_mongodb_databases()
             elif options == "2":
-                create_a_mongodb_database()
-            elif options == "3":
-                create_a_mongo_db_collection()
-            elif options == "4":
-                delete_a_mongodb_database()
-            elif options == "5":
-                delete_a_mongo_db_collection()
-            elif options == "6":
                 connect_to_a_mongodb_database()
+            elif options == "3":
+                create_a_mongodb_database()
+            elif options == "4":
+                create_a_mongo_db_collection()
+            elif options == "5":
+                delete_a_mongodb_database()
+            elif options == "6":
+                delete_a_mongo_db_collection()
+            elif options == "7":
+                show_user_permissions()
+            elif options == "8":
+                grant_user_privileges()
+            elif options == "9":
+                revoke_user_privileges()
+            elif options == "10":
+                create_mongo_client_user()
+            elif options == "11":
+                delete_mongo_client_user()
+            elif options == "12":
+                create_mongodb_user()
+            elif options == "13":
+                delete_mongodb_user()
+
             else:
                 print("\nInvalid option, please try again.")
                 mongodb_main_menu()
