@@ -1,5 +1,5 @@
 # Mongodb-Operations-Console
-Pymongo based CLI client, to run operation on existing databases and collections
+Pymongo based CLI client, to run operations on existing databases and collections.
 
 Program developed by Gustavo Wydler Azuaga 
 
